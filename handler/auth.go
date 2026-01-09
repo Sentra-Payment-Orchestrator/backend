@@ -1,10 +1,12 @@
 package handler
 
 import (
-	"context"
 	"fmt"
+	"net/http"
 
+	"github.com/dwikie/sentra-payment-orchestrator/model"
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -22,21 +24,56 @@ func (h *AuthHandlers) Logout(ctx *gin.Context) {
 	ctx.JSON(200, gin.H{"message": "Logout successful"})
 }
 
-func (h *AuthHandlers) Register(ctx *gin.Context) {
-	// get payload from request
-	payload := ""
+func (h *AuthHandlers) Register(c *gin.Context) {
+	ctx := c.Request.Context()
+	payload := model.RegisterRequest{}
 
-	c := context.Background()
-	conn, err := h.Pool.Acquire(c)
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	conn, err := h.Pool.Acquire(ctx)
 	if err != nil {
-		ctx.JSON(500, gin.H{"error": "Database connection error"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection error"})
 		return
 	}
 	defer conn.Release()
 
-	_, err = conn.Exec(c, "INSERT INTO users (payload) VALUES ($1)", payload)
+	tx, err := conn.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to begin transaction"})
+		return
+	}
+	defer tx.Rollback(ctx)
 
-	ctx.JSON(200, gin.H{"message": "Registration successful"})
+	user := tx.QueryRow(ctx, `
+	INSERT INTO users (username, password, status)
+	VALUES ($1, $2, $3) RETURNING id
+	`, payload.Username, payload.Password, 0)
+
+	var userID uint8
+	if err := user.Scan(&userID); err != nil {
+		fmt.Println(err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+		return
+	}
+
+	_, err = tx.Exec(ctx, `
+	INSERT INTO user_profile (user_id, first_name, last_name, email, phone_number)
+	VALUES ($1, $2, $3, $4, $5)`,
+		userID, payload.FirstName, payload.LastName, payload.Email, payload.PhoneNumber)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user profile"})
+		return
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"message": "Registration successful", "user_id": userID})
 }
 
 func (h *AuthHandlers) CreateToken(signature string, purpose string) (string, error) {
