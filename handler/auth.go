@@ -3,11 +3,13 @@ package handler
 import (
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/dwikie/sentra-payment-orchestrator/model"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/o1egl/paseto"
 )
 
 type AuthHandlers struct {
@@ -76,23 +78,47 @@ func (h *AuthHandlers) Register(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"message": "Registration successful", "user_id": userID})
 }
 
-func (h *AuthHandlers) CreateToken(signature string, purpose string) (string, error) {
+func (h *AuthHandlers) CreateToken(signature []byte, purpose string, claims ...map[string]string) (string, error) {
 	// Implement token creation logic here
+	now := time.Now()
+	nbf := now
+	jsonToken := paseto.JSONToken{}
+
 	switch purpose {
 	case "access":
-		// Create an access token
-		return "access_token_example", nil
+		exp := now.Add(15 * time.Minute)
+
+		jsonToken = paseto.JSONToken{
+			Audience:   "rep",
+			Issuer:     "rep juga",
+			Jti:        "",
+			Subject:    "",
+			IssuedAt:   now,
+			NotBefore:  nbf,
+			Expiration: exp,
+		}
+
 	case "refresh":
-		// Create a refresh token
-		return "refresh_token_example", nil
-	case "reset_password":
-		// Create a reset password token
-		return "reset_password_token_example", nil
-	case "email_verification":
-		// Create an email verification token
-		return "email_verification_token_example", nil
+		exp := now.Add(24 * time.Hour)
+
+		jsonToken = paseto.JSONToken{
+			Audience:   "rep",
+			Issuer:     "rep juga",
+			Jti:        "rahasia",
+			Subject:    "",
+			IssuedAt:   now,
+			NotBefore:  nbf,
+			Expiration: exp,
+		}
+
 	default:
-		// Handle unknown purpose
 		return "", fmt.Errorf("unknown token purpose: %s", purpose)
 	}
+
+	token, err := paseto.NewV2().Encrypt(signature, jsonToken, nil)
+	if err != nil {
+		return "", err
+	}
+
+	return token, nil
 }
