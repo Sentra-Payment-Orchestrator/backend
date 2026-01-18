@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/dwikie/sentra-payment-orchestrator/helper"
 	"github.com/dwikie/sentra-payment-orchestrator/model"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
@@ -62,10 +63,16 @@ func (h *AuthHandlers) Register(c *gin.Context) {
 	}
 	defer tx.Rollback(ctx)
 
+	hashedPassword, err := helper.HashPassword(payload.Password)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+		return
+	}
+
 	user := tx.QueryRow(ctx, `
 	INSERT INTO users (username, password, status)
 	VALUES ($1, $2, $3) RETURNING id
-	`, payload.Username, payload.Password, 0)
+	`, payload.Username, hashedPassword, 0)
 
 	var userID uint8
 	if err := user.Scan(&userID); err != nil {
@@ -88,7 +95,7 @@ func (h *AuthHandlers) Register(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "Registration successful", "user_id": userID})
+	c.JSON(http.StatusCreated, gin.H{"message": "User registered successfully"})
 }
 
 func (h *AuthHandlers) CreateToken(signature []byte, purpose string, jsonToken paseto.JSONToken, footer string, customClaims ...map[string]string) (string, error) {
@@ -116,4 +123,23 @@ func (h *AuthHandlers) CreateToken(signature []byte, purpose string, jsonToken p
 	}
 
 	return token, nil
+}
+
+func (h *AuthHandlers) ParseToken(signature []byte, token string) (*paseto.JSONToken, error) {
+	jsonToken := paseto.JSONToken{}
+
+	err := paseto.NewV2().Decrypt(token, signature, &jsonToken, nil)
+	if err != nil {
+		return &jsonToken, fmt.Errorf("invalid token: %v", err)
+	}
+
+	now := time.Now()
+	if jsonToken.Expiration.Before(now) {
+		return &jsonToken, fmt.Errorf("invalid token: token has expired")
+	}
+	if jsonToken.NotBefore.After(now) {
+		return &jsonToken, fmt.Errorf("invalid token: token not valid yet")
+	}
+
+	return &jsonToken, nil
 }

@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"github.com/dwikie/sentra-payment-orchestrator/config"
+	"github.com/dwikie/sentra-payment-orchestrator/helper"
 	"github.com/gin-gonic/gin"
 )
 
@@ -24,6 +25,19 @@ func main() {
 	app := &App{
 		Handlers: NewHandlers(config.Pool),
 	}
+
+	paswd, err := helper.HashPassword("securepassword")
+	if err != nil {
+		log.Printf("Failed to hash password: %v", err)
+	}
+	log.Printf("Hashed password: %s", paswd)
+
+	// verify password
+	match, err := helper.VerifyPassword(paswd, "securepassword")
+	if err != nil {
+		log.Printf("Failed to verify password: %v", err)
+	}
+	log.Printf("Password match: %v", match)
 
 	app.RegisterRoutes(r)
 
