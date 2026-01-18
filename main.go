@@ -5,7 +5,6 @@ import (
 
 	"github.com/dwikie/sentra-payment-orchestrator/config"
 	"github.com/gin-gonic/gin"
-	"github.com/o1egl/paseto"
 )
 
 type App struct {
@@ -25,22 +24,6 @@ func main() {
 	app := &App{
 		Handlers: NewHandlers(config.Pool),
 	}
-
-	token, err := app.Handlers.Auth.CreateToken([]byte("f9c346af754b4e0b0a7417ee9546c47c"), "access")
-	if err != nil {
-		log.Fatalf("Failed to create token: %v", err)
-	}
-	log.Printf("Generated Token: %s", token)
-
-	var newJsonToken paseto.JSONToken
-	var newFooter string
-	err = paseto.NewV2().Decrypt(token, []byte("f9c346af754b4e0b0a7417ee9546c47c"), &newJsonToken, &newFooter)
-
-	if err != nil {
-		log.Fatalf("Failed to decrypt token: %v", err)
-	}
-	log.Printf("Decrypted Token Claims: %v", newJsonToken)
-	log.Printf("Footer", newFooter)
 
 	app.RegisterRoutes(r)
 

@@ -16,14 +16,27 @@ type AuthHandlers struct {
 	Pool *pgxpool.Pool
 }
 
-func (h *AuthHandlers) Login(ctx *gin.Context) {
-	// Implement login logic here, e.g., validate user credentials, generate tokens, etc.
-	ctx.JSON(200, gin.H{"message": "Login successful"})
+func (h *AuthHandlers) Login(c *gin.Context) {
+	ctx := c.Request.Context()
+	payload := model.LoginRequest{}
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	conn, err := h.Pool.Acquire(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection error"})
+		return
+	}
+	defer conn.Release()
+
+	c.JSON(200, gin.H{"message": "Login successful"})
 }
 
-func (h *AuthHandlers) Logout(ctx *gin.Context) {
+func (h *AuthHandlers) Logout(c *gin.Context) {
 	// Implement logout logic here, e.g., invalidate tokens, clear sessions, etc.
-	ctx.JSON(200, gin.H{"message": "Logout successful"})
+	c.JSON(200, gin.H{"message": "Logout successful"})
 }
 
 func (h *AuthHandlers) Register(c *gin.Context) {
@@ -78,44 +91,26 @@ func (h *AuthHandlers) Register(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"message": "Registration successful", "user_id": userID})
 }
 
-func (h *AuthHandlers) CreateToken(signature []byte, purpose string, claims ...map[string]string) (string, error) {
-	// Implement token creation logic here
+func (h *AuthHandlers) CreateToken(signature []byte, purpose string, jsonToken paseto.JSONToken, footer string, customClaims ...map[string]string) (string, error) {
 	now := time.Now()
-	nbf := now
-	jsonToken := paseto.JSONToken{}
+	jsonToken.IssuedAt = now
+	jsonToken.NotBefore = now
+	for _, claims := range customClaims {
+		for k, v := range claims {
+			jsonToken.Set(k, v)
+		}
+	}
 
 	switch purpose {
 	case "access":
-		exp := now.Add(15 * time.Minute)
-
-		jsonToken = paseto.JSONToken{
-			Audience:   "rep",
-			Issuer:     "rep juga",
-			Jti:        "",
-			Subject:    "",
-			IssuedAt:   now,
-			NotBefore:  nbf,
-			Expiration: exp,
-		}
-
+		jsonToken.Expiration = now.Add(15 * time.Minute)
 	case "refresh":
-		exp := now.Add(24 * time.Hour)
-
-		jsonToken = paseto.JSONToken{
-			Audience:   "rep",
-			Issuer:     "rep juga",
-			Jti:        "rahasia",
-			Subject:    "",
-			IssuedAt:   now,
-			NotBefore:  nbf,
-			Expiration: exp,
-		}
-
+		jsonToken.Expiration = now.Add(24 * time.Hour)
 	default:
 		return "", fmt.Errorf("unknown token purpose: %s", purpose)
 	}
 
-	token, err := paseto.NewV2().Encrypt(signature, jsonToken, nil)
+	token, err := paseto.NewV2().Encrypt(signature, jsonToken, footer)
 	if err != nil {
 		return "", err
 	}
