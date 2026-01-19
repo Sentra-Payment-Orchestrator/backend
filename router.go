@@ -9,6 +9,5 @@ func (a *App) RegisterRoutes(r *gin.Engine) {
 		auth.POST("/register", a.Handlers.Auth.Register)
 		// Add more auth routes here as needed
 		// auth.POST("/logout", a.Handlers.Auth.Logout)
-		// auth.POST("/register", a.Handlers.Auth.Register)
 	}
 }
