@@ -74,7 +74,7 @@ func (h *AuthHandlers) Register(c *gin.Context) {
 	VALUES ($1, $2, $3) RETURNING id
 	`, payload.Username, hashedPassword, 0)
 
-	var userID uint8
+	var userID int64
 	if err := user.Scan(&userID); err != nil {
 		fmt.Println(err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
