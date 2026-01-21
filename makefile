@@ -28,3 +28,6 @@ migrate-version:
 # take name as an argument (e.g., make create-migration name=create_users_table)
 create-migration:
 	migrate create -ext sql -dir ./migrations -seq $(name)
+
+run-dev:
+	go run *.go
