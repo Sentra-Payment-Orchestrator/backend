@@ -6,12 +6,16 @@ import (
 )
 
 type Handlers struct {
-	Auth *handler.AuthHandlers
+	Auth *handler.AuthHandler
+	User *handler.UserHandler
 }
 
-// NewHandlers initializes all handlers
 func NewHandlers(pool *pgxpool.Pool) *Handlers {
+	userHandler := handler.NewUserHandler(pool)
+	authHandler := handler.NewAuthHandler(pool, userHandler)
+
 	return &Handlers{
-		Auth: &handler.AuthHandlers{Pool: pool},
+		Auth: authHandler,
+		User: userHandler,
 	}
 }

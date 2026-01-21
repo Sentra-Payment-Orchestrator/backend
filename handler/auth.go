@@ -3,6 +3,7 @@ package handler
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/dwikie/sentra-payment-orchestrator/helper"
@@ -13,11 +14,16 @@ import (
 	"github.com/o1egl/paseto"
 )
 
-type AuthHandlers struct {
-	Pool *pgxpool.Pool
+type AuthHandler struct {
+	Pool        *pgxpool.Pool
+	UserHandler *UserHandler
 }
 
-func (h *AuthHandlers) Login(c *gin.Context) {
+func NewAuthHandler(pool *pgxpool.Pool, userHandler *UserHandler) *AuthHandler {
+	return &AuthHandler{Pool: pool, UserHandler: userHandler}
+}
+
+func (h *AuthHandler) Login(c *gin.Context) {
 	ctx := c.Request.Context()
 	payload := model.LoginRequest{}
 	if err := c.ShouldBindJSON(&payload); err != nil {
@@ -32,15 +38,55 @@ func (h *AuthHandlers) Login(c *gin.Context) {
 	}
 	defer conn.Release()
 
-	c.JSON(200, gin.H{"message": "Login successful"})
+	user, err := h.UserHandler.getUserByEmail(payload.Email)
+	if err != nil {
+		fmt.Println(err)
+		if err == pgx.ErrNoRows {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve user"})
+		}
+		return
+	}
+
+	if err := helper.VerifyPassword(user.Password, payload.Password); err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
+		return
+	}
+
+	refreshTokenSecret := os.Getenv("REFRESH_TOKEN_SECRET")
+	refreshToken, err := h.CreateToken([]byte(refreshTokenSecret), "refresh", paseto.JSONToken{}, "", map[string]string{
+		"user_id": fmt.Sprintf("%d", user.Id),
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create refresh token"})
+		return
+	}
+
+	accessTokenSecret := os.Getenv("ACCESS_TOKEN_SECRET")
+	accessToken, err := h.CreateToken([]byte(accessTokenSecret), "access", paseto.JSONToken{}, "", map[string]string{
+		"user_id": fmt.Sprintf("%d", user.Id),
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create access token"})
+		return
+	}
+
+	c.SetCookie("refresh_token", refreshToken, 3600*24, "/", "localhost", false, true)
+	c.Header("Authorization", "Bearer "+accessToken)
+
+	c.JSON(http.StatusOK, gin.H{"message": "Login successful", "data": gin.H{
+		"access_token":  accessToken,
+		"refresh_token": refreshToken,
+	}})
 }
 
-func (h *AuthHandlers) Logout(c *gin.Context) {
+func (h *AuthHandler) Logout(c *gin.Context) {
 	// Implement logout logic here, e.g., invalidate tokens, clear sessions, etc.
 	c.JSON(200, gin.H{"message": "Logout successful"})
 }
 
-func (h *AuthHandlers) Register(c *gin.Context) {
+func (h *AuthHandler) Register(c *gin.Context) {
 	ctx := c.Request.Context()
 	payload := model.RegisterRequest{}
 
@@ -70,9 +116,9 @@ func (h *AuthHandlers) Register(c *gin.Context) {
 	}
 
 	user := tx.QueryRow(ctx, `
-	INSERT INTO users (username, password, status)
+	INSERT INTO users (email, password, status)
 	VALUES ($1, $2, $3) RETURNING id
-	`, payload.Username, hashedPassword, 0)
+	`, payload.Email, hashedPassword, 0)
 
 	var userID int64
 	if err := user.Scan(&userID); err != nil {
@@ -82,9 +128,9 @@ func (h *AuthHandlers) Register(c *gin.Context) {
 	}
 
 	_, err = tx.Exec(ctx, `
-	INSERT INTO user_profile (user_id, first_name, last_name, email, phone_number)
-	VALUES ($1, $2, $3, $4, $5)`,
-		userID, payload.FirstName, payload.LastName, payload.Email, payload.PhoneNumber)
+	INSERT INTO user_profile (user_id, first_name, last_name, phone_number)
+	VALUES ($1, $2, $3, $4)`,
+		userID, payload.FirstName, payload.LastName, payload.PhoneNumber)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user profile"})
 		return
@@ -98,7 +144,7 @@ func (h *AuthHandlers) Register(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"message": "User registered successfully"})
 }
 
-func (h *AuthHandlers) CreateToken(signature []byte, purpose string, jsonToken paseto.JSONToken, footer string, customClaims ...map[string]string) (string, error) {
+func (h *AuthHandler) CreateToken(signature []byte, purpose string, jsonToken paseto.JSONToken, footer string, customClaims ...map[string]string) (string, error) {
 	now := time.Now()
 	jsonToken.IssuedAt = now
 	jsonToken.NotBefore = now
@@ -125,7 +171,7 @@ func (h *AuthHandlers) CreateToken(signature []byte, purpose string, jsonToken p
 	return token, nil
 }
 
-func (h *AuthHandlers) ParseToken(signature []byte, token string) (*paseto.JSONToken, error) {
+func (h *AuthHandler) ParseToken(signature []byte, token string) (*paseto.JSONToken, error) {
 	jsonToken := paseto.JSONToken{}
 
 	err := paseto.NewV2().Decrypt(token, signature, &jsonToken, nil)

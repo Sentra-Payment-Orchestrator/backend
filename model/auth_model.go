@@ -4,7 +4,6 @@ package model
 type RegisterRequest struct {
 	FirstName            string `json:"first_name" binding:"required"`
 	LastName             string `json:"last_name" binding:"required"`
-	Username             string `json:"username" binding:"required"`
 	Password             string `json:"password" binding:"required"`
 	PasswordConfirmation string `json:"password_confirmation" binding:"required,eqfield=Password"`
 	Email                string `json:"email" binding:"required,email"`
@@ -12,6 +11,6 @@ type RegisterRequest struct {
 }
 
 type LoginRequest struct {
-	Username string `json:"email" binding:"required"`
+	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required"`
 }
