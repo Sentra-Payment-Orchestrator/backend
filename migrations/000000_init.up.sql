@@ -1,13 +1,16 @@
 -- User
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
-    username VARCHAR(50) UNIQUE NOT NULL,
+    username VARCHAR(50) UNIQUE NOT NULL,			
+    email VARCHAR(255) UNIQUE NOT NULL,
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     password VARCHAR(255) NOT NULL,
     status SMALLINT DEFAULT 0 NOT NULL,
+    is_active BOOLEAN DEFAULT true,
+    last_login_at TIMESTAMP,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
-
 CREATE INDEX idx_user_username ON users(username);
 
 CREATE TABLE user_profile (
@@ -15,7 +18,6 @@ CREATE TABLE user_profile (
     user_id INT REFERENCES users(id),
     first_name VARCHAR(20),
     last_name VARCHAR(20),
-    email VARCHAR(100) UNIQUE,
     phone_number VARCHAR(15),
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
