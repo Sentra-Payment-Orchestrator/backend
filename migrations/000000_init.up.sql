@@ -1,9 +1,7 @@
 -- User
 CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
-    username VARCHAR(50) UNIQUE NOT NULL,			
+    id SERIAL PRIMARY KEY,			
     email VARCHAR(255) UNIQUE NOT NULL,
-    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     password VARCHAR(255) NOT NULL,
     status SMALLINT DEFAULT 0 NOT NULL,
     is_active BOOLEAN DEFAULT true,
@@ -11,7 +9,7 @@ CREATE TABLE users (
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX idx_user_username ON users(username);
+CREATE INDEX idx_users_email ON users(email);
 
 CREATE TABLE user_profile (
     id SERIAL PRIMARY KEY,
@@ -23,7 +21,6 @@ CREATE TABLE user_profile (
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX idx_user_profile_user_id ON user_profile(user_id);
-CREATE INDEX idx_user_profile_email ON user_profile(email);
 
 CREATE TABLE user_address (
     id SERIAL PRIMARY KEY,

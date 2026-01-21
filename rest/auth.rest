@@ -4,9 +4,18 @@ Content-Type: application/json
 {
   "first_name": "John",
   "last_name": "Doe",
-  "username": "johndoe",
   "password": "securepassword",
   "password_confirmation": "securepassword",
   "email": "johndoe@mail.com",
   "phone_number": "1234567890"
 }
+
+###
+POST http://localhost:8080/auth/login
+Content-Type: application/json
+
+{
+  "email": "johndoe@mail.com",
+  "password": "securepassword"
+}
+

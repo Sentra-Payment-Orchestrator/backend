@@ -46,31 +46,36 @@ func HashPassword(password string) (string, error) {
 	return finalHash, nil
 }
 
-func VerifyPassword(encodedHash, password string) (bool, error) {
+func VerifyPassword(encodedHash, password string) error {
 	parts := strings.Split(encodedHash, "$")
 
 	if len(parts) != 6 {
-		return false, fmt.Errorf("invalid hash format")
+		return fmt.Errorf("invalid hash format")
 	}
 
 	var memory, iterations uint32
 	var parallelism uint8
 	_, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &iterations, &parallelism)
 	if err != nil {
-		return false, fmt.Errorf("failed to parse parameters: %w", err)
+		return fmt.Errorf("failed to parse parameters: %w", err)
 	}
 
 	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
 	if err != nil {
-		return false, fmt.Errorf("failed to decode salt: %w", err)
+		return fmt.Errorf("failed to decode salt: %w", err)
 	}
 
 	hash, err := base64.RawStdEncoding.DecodeString(parts[5])
 	if err != nil {
-		return false, fmt.Errorf("failed to decode hash: %w", err)
+		return fmt.Errorf("failed to decode hash: %w", err)
 	}
 
 	computedHash := argon2.IDKey([]byte(password), salt, iterations, memory, parallelism, uint32(len(hash)))
 
-	return subtle.ConstantTimeCompare(computedHash, hash) == 1, nil
+	fmt.Println(encodedHash, computedHash)
+	if subtle.ConstantTimeCompare(computedHash, hash) == 1 {
+		return nil
+	}
+
+	return fmt.Errorf("password does not match")
 }
