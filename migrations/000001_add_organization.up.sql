@@ -23,7 +23,7 @@ CREATE INDEX IF NOT EXISTS idx_organizations_email ON organizations(email);
 CREATE INDEX IF NOT EXISTS idx_organizations_subscription ON organizations(subscription_status, subscription_ends_at);
 
 ALTER TABLE users
-ADD COLUMN organization_id INT REFERENCES organization(id);
+ADD COLUMN organization_id INT REFERENCES organizations(id);
 CREATE INDEX idx_users_organization_id ON users(organization_id);
 
 UPDATE users
