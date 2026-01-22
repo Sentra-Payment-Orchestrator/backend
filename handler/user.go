@@ -16,13 +16,12 @@ func NewUserHandler(pool *pgxpool.Pool) *UserHandler {
 	return &UserHandler{Pool: pool}
 }
 
-func (h *UserHandler) getUserByEmail(email string) (*model.User, error) {
+func (h *UserHandler) getUserByEmail(ctx context.Context, email string) (*model.User, error) {
 	if email == "" {
 		return nil, fmt.Errorf("email cannot be empty")
 	}
 
 	user := model.User{}
-	ctx := context.Background()
 	conn, err := h.Pool.Acquire(ctx)
 	if err != nil {
 		return nil, err

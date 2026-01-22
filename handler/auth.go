@@ -3,7 +3,6 @@ package handler
 import (
 	"fmt"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/dwikie/sentra-payment-orchestrator/helper"
@@ -12,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/o1egl/paseto"
+	"github.com/spf13/viper"
 )
 
 type AuthHandler struct {
@@ -31,14 +31,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	conn, err := h.Pool.Acquire(ctx)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection error"})
-		return
-	}
-	defer conn.Release()
-
-	user, err := h.UserHandler.getUserByEmail(payload.Email)
+	user, err := h.UserHandler.getUserByEmail(ctx, payload.Email)
 	if err != nil {
 		fmt.Println(err)
 		if err == pgx.ErrNoRows {
@@ -54,7 +47,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	refreshTokenSecret := os.Getenv("REFRESH_TOKEN_SECRET")
+	refreshTokenSecret := viper.GetString("REFRESH_TOKEN_SECRET")
+	println(refreshTokenSecret)
 	refreshToken, err := h.CreateToken([]byte(refreshTokenSecret), "refresh", paseto.JSONToken{}, "", map[string]string{
 		"user_id": fmt.Sprintf("%d", user.Id),
 	})
@@ -63,7 +57,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	accessTokenSecret := os.Getenv("ACCESS_TOKEN_SECRET")
+	accessTokenSecret := viper.GetString("ACCESS_TOKEN_SECRET")
 	accessToken, err := h.CreateToken([]byte(accessTokenSecret), "access", paseto.JSONToken{}, "", map[string]string{
 		"user_id": fmt.Sprintf("%d", user.Id),
 	})

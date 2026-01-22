@@ -3,7 +3,6 @@ package main
 import (
 	"log"
 
-	"github.com/dwikie/sentra-payment-orchestrator/config"
 	"github.com/gin-gonic/gin"
 )
 
@@ -15,14 +14,14 @@ func main() {
 	// Create a Gin router with default middleware (logger and recovery)
 	r := gin.Default()
 
-	err := config.Init()
+	cfg, err := InitConfig()
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer config.Pool.Close()
+	defer cfg.Pool.Close()
 
 	app := &App{
-		Handlers: NewHandlers(config.Pool),
+		Handlers: NewHandlers(cfg.Pool),
 	}
 
 	app.RegisterRoutes(r)

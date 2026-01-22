@@ -5,7 +5,6 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"fmt"
-	"log"
 	"strings"
 
 	"golang.org/x/crypto/argon2"
@@ -39,7 +38,6 @@ func HashPassword(password string) (string, error) {
 
 	encodedSalt := base64.RawStdEncoding.EncodeToString(salt)
 	encodedHash := base64.RawStdEncoding.EncodeToString(hashed)
-	log.Println(encodedHash)
 
 	finalHash := fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s", Argon2Version, Argon2Memory, Argon2Iter, Argon2Thread, encodedSalt, encodedHash)
 
@@ -72,7 +70,6 @@ func VerifyPassword(encodedHash, password string) error {
 
 	computedHash := argon2.IDKey([]byte(password), salt, iterations, memory, parallelism, uint32(len(hash)))
 
-	fmt.Println(encodedHash, computedHash)
 	if subtle.ConstantTimeCompare(computedHash, hash) == 1 {
 		return nil
 	}
