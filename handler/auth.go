@@ -66,7 +66,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	c.SetCookie("refresh_token", refreshToken, 3600*24, "/", "localhost", false, true)
+	domain := viper.GetString("DOMAIN")
+	c.SetCookie("refresh_token", refreshToken, 3600*24, "/", domain, false, true)
 	c.Header("Authorization", "Bearer "+accessToken)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Login successful", "data": gin.H{
@@ -76,66 +77,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 }
 
 func (h *AuthHandler) Logout(c *gin.Context) {
-	// Implement logout logic here, e.g., invalidate tokens, clear sessions, etc.
-	c.JSON(200, gin.H{"message": "Logout successful"})
-}
-
-func (h *AuthHandler) Register(c *gin.Context) {
-	ctx := c.Request.Context()
-	payload := model.RegisterRequest{}
-
-	if err := c.ShouldBindJSON(&payload); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	conn, err := h.Pool.Acquire(ctx)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection error"})
-		return
-	}
-	defer conn.Release()
-
-	tx, err := conn.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to begin transaction"})
-		return
-	}
-	defer tx.Rollback(ctx)
-
-	hashedPassword, err := helper.HashPassword(payload.Password)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
-		return
-	}
-
-	user := tx.QueryRow(ctx, `
-	INSERT INTO users (email, password, status)
-	VALUES ($1, $2, $3) RETURNING id
-	`, payload.Email, hashedPassword, 0)
-
-	var userID int64
-	if err := user.Scan(&userID); err != nil {
-		fmt.Println(err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
-		return
-	}
-
-	_, err = tx.Exec(ctx, `
-	INSERT INTO user_profile (user_id, first_name, last_name, phone_number)
-	VALUES ($1, $2, $3, $4)`,
-		userID, payload.FirstName, payload.LastName, payload.PhoneNumber)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user profile"})
-		return
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
-		return
-	}
-
-	c.JSON(http.StatusCreated, gin.H{"message": "User registered successfully"})
+	domain := viper.GetString("DOMAIN")
+	c.SetCookie("refresh_token", "", -1, "/", domain, false, true)
+	c.JSON(http.StatusOK, gin.H{"message": "Logout successful"})
 }
 
 func (h *AuthHandler) CreateToken(signature []byte, purpose string, jsonToken paseto.JSONToken, footer string, customClaims ...map[string]string) (string, error) {

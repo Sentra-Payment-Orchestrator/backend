@@ -4,27 +4,20 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/spf13/viper"
 )
 
 func InitDb() (*pgxpool.Pool, error) {
-	// Read database connection string from environment variable
-	connString := os.Getenv("DATABASE_URL")
-	if connString == "" {
-		connString = "postgres://user:password@localhost:5432/mydb"
-		log.Println("DATABASE_URL not set, using default connection string")
-	}
+	connString := viper.GetString("DATABASE_URL")
 
-	// Configure connection pool
 	config, err := pgxpool.ParseConfig(connString)
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse connection string: %w", err)
 	}
 
-	// Set pool configuration
 	config.MaxConns = 25
 	config.MinConns = 5
 	config.MaxConnLifetime = time.Hour
@@ -32,7 +25,6 @@ func InitDb() (*pgxpool.Pool, error) {
 	config.HealthCheckPeriod = time.Minute
 	config.ConnConfig.ConnectTimeout = 5 * time.Second
 
-	// Create a context with timeout for connection initialization
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -41,7 +33,6 @@ func InitDb() (*pgxpool.Pool, error) {
 		return nil, fmt.Errorf("unable to create connection pool: %w", err)
 	}
 
-	// Verify connection with ping
 	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := pool.Ping(ctx); err != nil {

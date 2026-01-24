@@ -7,17 +7,17 @@ import (
 )
 
 func LoadEnv() {
-	// load .env file
 	viper.AddConfigPath(".")
 	viper.SetConfigName(".env")
 	viper.SetConfigType("env")
 
+	viper.SetDefault("DOMAIN", "localhost")
+	viper.SetDefault("DATABASE_URL", "postgres://user:password@localhost:5432/mydb?sslmode=disable")
+
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			// Config file not found; ignore error if desired
 			log.Println("No .env file found, relying on OS env vars/defaults")
 		} else {
-			// Handle other errors
 			log.Fatalf("fatal error config file: %v", err)
 		}
 	}
