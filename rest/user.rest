@@ -1,0 +1,16 @@
+POST http://localhost:8080/user
+Content-Type: application/json
+
+{
+  "full_name": "John Doe",
+  "password": "securepassword",
+  "password_confirmation": "securepassword",
+  "email": "johndoe@mail.com",
+  "phone_number": "1234567890"
+}
+
+###
+
+GET http://localhost:8080/user/1
+Content-Type: application/json
+Authorization: Bearer v2.local.3e44-Yref2QqToWdbtApmZ40ECfTH5THLGkG3ezsHVw3zos1IGN69ywQtacQPp9V5rFjmeCdJC85xMOptQehFvR7pw_x2qmkGTuPlfrhh7lUB4AaZKl1erdChfUowdTW5pIF-wxyVLfa-fTChbHyQ3R8uqq0QG45NKC2hzU5fxHFpT3mal4OYQufR8e7P-eiahvCrLpS3O3OXQhWzg

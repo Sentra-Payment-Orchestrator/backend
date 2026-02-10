@@ -2,28 +2,16 @@ package helper
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/o1egl/paseto"
 )
 
-type Validator struct {
-	NotBefore        bool
-	Expiration       bool
-	CustomValidators map[string]func(string) error
-}
-
-func CreateToken(signature []byte, exp time.Time, jsonToken paseto.JSONToken, footer string, customClaims ...map[string]string) (string, error) {
-	now := time.Now()
-	jsonToken.IssuedAt = now
-	jsonToken.NotBefore = now
+func CreateToken(signature []byte, jsonToken paseto.JSONToken, footer string, customClaims ...map[string]string) (string, error) {
 	for _, claims := range customClaims {
 		for k, v := range claims {
 			jsonToken.Set(k, v)
 		}
 	}
-
-	jsonToken.Expiration = exp
 
 	token, err := paseto.NewV2().Encrypt(signature, jsonToken, footer)
 	if err != nil {
@@ -33,7 +21,7 @@ func CreateToken(signature []byte, exp time.Time, jsonToken paseto.JSONToken, fo
 	return token, nil
 }
 
-func DecodeToken(signature []byte, token string, tokenValidator *Validator) (*paseto.JSONToken, *string, error) {
+func DecodeToken(signature []byte, token string, tokenValidator map[string]func(string) error) (*paseto.JSONToken, *string, error) {
 	jsonToken := paseto.JSONToken{}
 	footer := ""
 
@@ -50,25 +38,12 @@ func DecodeToken(signature []byte, token string, tokenValidator *Validator) (*pa
 	return &jsonToken, &footer, nil
 }
 
-func validateToken(token *paseto.JSONToken, tokenValidator *Validator) error {
+func validateToken(token *paseto.JSONToken, tokenValidator map[string]func(string) error) error {
 	if tokenValidator == nil {
 		return nil
 	}
 
-	now := time.Now()
-	if tokenValidator.Expiration {
-		if token.Expiration.Before(now) {
-			return fmt.Errorf("invalid token: token has expired")
-		}
-	}
-
-	if tokenValidator.NotBefore {
-		if token.NotBefore.After(now) {
-			return fmt.Errorf("invalid token: token not valid yet")
-		}
-	}
-
-	for claim, validateFunc := range tokenValidator.CustomValidators {
+	for claim, validateFunc := range tokenValidator {
 		value := token.Get(claim)
 		if value == "" {
 			return fmt.Errorf("invalid token: missing claim %s", claim)

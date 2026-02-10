@@ -14,8 +14,7 @@ CREATE INDEX idx_users_email ON users(email);
 CREATE TABLE user_profile (
     id SERIAL PRIMARY KEY,
     user_id INT REFERENCES users(id),
-    first_name VARCHAR(20),
-    last_name VARCHAR(20),
+    full_name VARCHAR(100),
     phone_number VARCHAR(15),
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
@@ -27,9 +26,9 @@ CREATE TABLE user_address (
     user_id INT REFERENCES users(id),
     street_address VARCHAR(100),
     city VARCHAR(20),
-    province VARCHAR(20),
-    postal_code VARCHAR(10),
-    country_code VARCHAR(2),
+    state VARCHAR(20),
+    zip_code VARCHAR(10),
+    country VARCHAR(2),
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );

@@ -6,16 +6,19 @@ import (
 )
 
 type Handlers struct {
-	Auth *handler.AuthHandler
-	User *handler.UserHandler
+	Auth         *handler.AuthHandler
+	User         *handler.UserHandler
+	Organization *handler.OrganizationHandler
 }
 
 func NewHandlers(pool *pgxpool.Pool) *Handlers {
-	userHandler := handler.NewUserHandler(pool)
+	orgHandler := handler.NewOrganizationHandler(pool)
+	userHandler := handler.NewUserHandler(pool, orgHandler)
 	authHandler := handler.NewAuthHandler(pool, userHandler)
 
 	return &Handlers{
-		Auth: authHandler,
-		User: userHandler,
+		Auth:         authHandler,
+		User:         userHandler,
+		Organization: orgHandler,
 	}
 }

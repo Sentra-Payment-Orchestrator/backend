@@ -33,42 +33,57 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	user, err := h.UserHandler.getUserByEmail(ctx, payload.Email)
 	if err != nil {
-		fmt.Println(err)
 		if err == pgx.ErrNoRows {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid email or password"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve user"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve user"})
 		}
 		return
 	}
 
 	if err := helper.VerifyPassword(user.Password, payload.Password); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid email or password"})
 		return
 	}
 
 	refreshTokenSecret := viper.GetString("REFRESH_TOKEN_SECRET")
-	println(refreshTokenSecret)
-	refreshToken, err := h.CreateToken([]byte(refreshTokenSecret), "refresh", paseto.JSONToken{}, "", map[string]string{
-		"user_id": fmt.Sprintf("%d", user.Id),
-	})
+	now := time.Now()
+
+	refreshClaims := paseto.JSONToken{
+		Subject:    fmt.Sprintf("%d", user.Id),
+		IssuedAt:   now,
+		NotBefore:  now,
+		Expiration: now.Add(24 * time.Hour),
+	}
+
+	refreshToken, err := helper.CreateToken([]byte(refreshTokenSecret), refreshClaims, "")
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create refresh token"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create refresh token"})
 		return
 	}
 
 	accessTokenSecret := viper.GetString("ACCESS_TOKEN_SECRET")
-	accessToken, err := h.CreateToken([]byte(accessTokenSecret), "access", paseto.JSONToken{}, "", map[string]string{
-		"user_id": fmt.Sprintf("%d", user.Id),
-	})
+	accessClaims := paseto.JSONToken{
+		Subject:    fmt.Sprintf("%d", user.Id),
+		IssuedAt:   now,
+		NotBefore:  now,
+		Expiration: now.Add(15 * time.Minute),
+	}
+
+	accessToken, err := helper.CreateToken([]byte(accessTokenSecret), accessClaims, "")
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create access token"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create access token"})
 		return
 	}
 
 	domain := viper.GetString("DOMAIN")
 	c.SetCookie("refresh_token", refreshToken, 3600*24, "/", domain, false, true)
-	c.Header("Authorization", "Bearer "+accessToken)
+
+	err = h.UserHandler.updateLastLogin(ctx, user.Id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update last login"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Login successful", "data": gin.H{
 		"access_token":  accessToken,
@@ -82,48 +97,56 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Logout successful"})
 }
 
-func (h *AuthHandler) CreateToken(signature []byte, purpose string, jsonToken paseto.JSONToken, footer string, customClaims ...map[string]string) (string, error) {
-	now := time.Now()
-	jsonToken.IssuedAt = now
-	jsonToken.NotBefore = now
-	for _, claims := range customClaims {
-		for k, v := range claims {
-			jsonToken.Set(k, v)
-		}
-	}
-
-	switch purpose {
-	case "access":
-		jsonToken.Expiration = now.Add(15 * time.Minute)
-	case "refresh":
-		jsonToken.Expiration = now.Add(24 * time.Hour)
-	default:
-		return "", fmt.Errorf("unknown token purpose: %s", purpose)
-	}
-
-	token, err := paseto.NewV2().Encrypt(signature, jsonToken, footer)
+func (h *AuthHandler) RefreshToken(c *gin.Context) {
+	refreshToken, err := c.Cookie("refresh_token")
 	if err != nil {
-		return "", err
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing refresh token"})
+		return
 	}
 
-	return token, nil
-}
+	refreshTokenSecret := viper.GetString("REFRESH_TOKEN_SECRET")
+	tokenValidator := map[string]func(string) error{
+		"exp": func(value string) error {
+			exp, err := time.Parse(time.RFC3339, value)
+			if err != nil {
+				return fmt.Errorf("invalid exp claim: %v", err)
+			}
+			if exp.Before(time.Now()) {
+				return fmt.Errorf("invalid token: expired")
+			}
+			return nil
+		},
+	}
 
-func (h *AuthHandler) ParseToken(signature []byte, token string) (*paseto.JSONToken, error) {
-	jsonToken := paseto.JSONToken{}
-
-	err := paseto.NewV2().Decrypt(token, signature, &jsonToken, nil)
+	claims, _, err := helper.DecodeToken([]byte(refreshTokenSecret), refreshToken, tokenValidator)
 	if err != nil {
-		return &jsonToken, fmt.Errorf("invalid token: %v", err)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
 	}
 
+	userId := claims.Get("user_id")
+	if userId == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token: missing user_id claim"})
+		return
+	}
+
+	accessTokenSecret := viper.GetString("ACCESS_TOKEN_SECRET")
 	now := time.Now()
-	if jsonToken.Expiration.Before(now) {
-		return &jsonToken, fmt.Errorf("invalid token: token has expired")
-	}
-	if jsonToken.NotBefore.After(now) {
-		return &jsonToken, fmt.Errorf("invalid token: token not valid yet")
+	accessClaims := paseto.JSONToken{
+		IssuedAt:   now,
+		NotBefore:  now,
+		Expiration: now.Add(15 * time.Minute),
 	}
 
-	return &jsonToken, nil
+	accessToken, err := helper.CreateToken([]byte(accessTokenSecret), accessClaims, "", map[string]string{
+		"user_id": userId,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create access token"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Token refreshed successfully", "data": gin.H{
+		"access_token": accessToken,
+	}})
 }

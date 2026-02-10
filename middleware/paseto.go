@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/dwikie/sentra-payment-orchestrator/helper"
 	"github.com/gin-gonic/gin"
@@ -13,7 +14,7 @@ import (
 
 type ClaimsValidator func(t *paseto.JSONToken) error
 
-func PasetoAuth(validators ...ClaimsValidator) gin.HandlerFunc {
+func RequiredAuthentication() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -22,68 +23,43 @@ func PasetoAuth(validators ...ClaimsValidator) gin.HandlerFunc {
 		}
 
 		parts := strings.Fields(authHeader)
-		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || !strings.HasPrefix(parts[1], "v2.local.") {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid Authorization header format"})
 			return
 		}
 
 		secret := viper.GetString("ACCESS_TOKEN_SECRET")
-		tokenValidator := &helper.Validator{
-			NotBefore:  true,
-			Expiration: true,
-			CustomValidators: map[string]func(string) error{
-				"nbf": func(value string) error {
-					return nil
-				},
+		tokenValidator := map[string]func(string) error{
+			"nbf": func(value string) error {
+				nbf, err := time.Parse(time.RFC3339, value)
+				if err != nil {
+					return fmt.Errorf("invalid nbf claim: %v", err)
+				}
+				if nbf.After(time.Now()) {
+					return fmt.Errorf("invalid token: not valid yet")
+				}
+				return nil
+			},
+			"exp": func(value string) error {
+				exp, err := time.Parse(time.RFC3339, value)
+				if err != nil {
+					return fmt.Errorf("invalid exp claim: %v", err)
+				}
+				if exp.Before(time.Now()) {
+					return fmt.Errorf("invalid token: expired")
+				}
+				return nil
 			},
 		}
+
 		claims, _, err := helper.DecodeToken([]byte(secret), parts[1], tokenValidator)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 			return
 		}
 
-		for _, validate := range validators {
-			if validate == nil {
-				continue
-			}
-			if err := validate(claims); err != nil {
-				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-				return
-			}
-		}
-
-		c.Set("paseto_claims", claims)
+		c.Set("user_id", claims.Subject)
+		c.Set("claims", claims)
 		c.Next()
-	}
-}
-
-func RequireAudience(expected string) ClaimsValidator {
-	return func(t *paseto.JSONToken) error {
-		if t.Audience != expected {
-			return fmt.Errorf("invalid token: incorrect audience")
-		}
-
-		return nil
-	}
-}
-
-func RequireSubject(expected string) ClaimsValidator {
-	return func(t *paseto.JSONToken) error {
-		if t.Subject != expected {
-			return fmt.Errorf("invalid token: incorrect subject")
-		}
-
-		return nil
-	}
-}
-
-func RequireIssuer(expected string) ClaimsValidator {
-	return func(t *paseto.JSONToken) error {
-		if t.Issuer != expected {
-			return fmt.Errorf("invalid token: incorrect issuer")
-		}
-
-		return nil
 	}
 }

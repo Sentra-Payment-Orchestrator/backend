@@ -10,19 +10,21 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/o1egl/paseto"
 )
 
 type UserHandler struct {
-	Pool *pgxpool.Pool
+	Pool        *pgxpool.Pool
+	OrgsHandler *OrganizationHandler
 }
 
-func NewUserHandler(pool *pgxpool.Pool) *UserHandler {
-	return &UserHandler{Pool: pool}
+func NewUserHandler(pool *pgxpool.Pool, orgsHandler *OrganizationHandler) *UserHandler {
+	return &UserHandler{Pool: pool, OrgsHandler: orgsHandler}
 }
 
 func (h *UserHandler) Register(c *gin.Context) {
 	ctx := c.Request.Context()
-	payload := model.RegisterRequest{}
+	payload := model.CreateUserpayload{}
 
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -37,7 +39,20 @@ func (h *UserHandler) Register(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"message": "User registered successfully"})
 }
 
-func (h *UserHandler) insertUser(ctx context.Context, payload model.RegisterRequest) error {
+func (h *UserHandler) GetUser(c *gin.Context) {
+	claims := c.MustGet("claims").(*paseto.JSONToken)
+	fmt.Printf("claims: %v\n", claims)
+	userID := c.Param("id")
+	if userID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user ID is required"})
+		return
+	}
+
+	// Implement logic to retrieve user by ID
+	c.JSON(http.StatusOK, gin.H{"message": "GetUser endpoint", "user_id": userID})
+}
+
+func (h *UserHandler) insertUser(ctx context.Context, payload model.CreateUserpayload) error {
 	conn, err := h.Pool.Acquire(ctx)
 	if err != nil {
 		return fmt.Errorf("error while acquiring database connection from pool: %v", err)
@@ -66,9 +81,9 @@ func (h *UserHandler) insertUser(ctx context.Context, payload model.RegisterRequ
 	}
 
 	_, err = tx.Exec(ctx, `
-	INSERT INTO user_profile (user_id, first_name, last_name, phone_number)
-	VALUES ($1, $2, $3, $4)`,
-		userID, payload.FirstName, payload.LastName, payload.PhoneNumber)
+	INSERT INTO user_profile (user_id, full_name, phone_number)
+	VALUES ($1, $2, $3)`,
+		userID, payload.FullName, payload.PhoneNumber)
 	if err != nil {
 		return fmt.Errorf("error while creating user profile: %v", err)
 	}
@@ -107,4 +122,24 @@ func (h *UserHandler) getUserByEmail(ctx context.Context, email string) (*model.
 	}
 
 	return &user, nil
+}
+
+func (h *UserHandler) updateLastLogin(ctx context.Context, userID int64) error {
+	conn, err := h.Pool.Acquire(ctx)
+	if err != nil {
+		return fmt.Errorf("error while acquiring database connection from pool: %v", err)
+	}
+	defer conn.Release()
+
+	_, err = conn.Exec(ctx, `
+		UPDATE users
+		SET last_login_at = NOW(), updated_at = NOW()
+		WHERE id = $1
+	`, userID)
+
+	if err != nil {
+		return fmt.Errorf("error while updating last login: %v", err)
+	}
+
+	return nil
 }
