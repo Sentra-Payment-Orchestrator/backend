@@ -12,7 +12,6 @@ func LoadEnv() {
 	viper.SetConfigType("env")
 
 	viper.SetDefault("APP_ENV", "development")
-
 	viper.SetDefault("DOMAIN", "localhost")
 	viper.SetDefault("DATABASE_URL", "postgres://user:password@localhost:5432/mydb?sslmode=disable")
 

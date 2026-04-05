@@ -1,6 +1,5 @@
 # Create database url variable
 -include .env
-export
 
 .PHONY: migrate
 

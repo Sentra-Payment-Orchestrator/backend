@@ -2,21 +2,25 @@ package main
 
 import (
 	"github.com/dwikie/sentra-payment-orchestrator/middleware"
+	"github.com/dwikie/sentra-payment-orchestrator/routes"
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func (a *App) RegisterRoutes(r *gin.Engine) {
-	auth := r.Group("/auth")
+func RegisterRoutes(r *gin.Engine, pool *pgxpool.Pool) {
+	auth := routes.InitAuthRoute(pool)
+	auth_group := r.Group("/auth")
 	{
-		auth.POST("/login", a.Handlers.Auth.Login)
-		auth.GET("/refresh", a.Handlers.Auth.RefreshToken)
-		// Add more auth routes here as needed
-		// auth.POST("/logout", a.Handlers.Auth.Logout)
+		auth_group.POST("/login", auth.Login)
+		auth_group.GET("/refresh", auth.RefreshToken)
 	}
-	user := r.Group("/user")
+
+	user := routes.InitUserRoute(pool)
+	user_group := r.Group("/user")
 	{
-		user.POST("/", a.Handlers.User.Register)
-		user.GET("/:id", middleware.RequiredAuthentication(), a.Handlers.User.GetUser)
+		user_group.POST("/", user.Createuser)
+		user_group.GET("/", user.GetUser)
+		user_group.GET("/:id", middleware.RequiredAuthentication(), user.GetUser)
 		// Add more user routes here as needed
 		// user.GET("/:id", middleware.PasetoAuth(), a.Handlers.User.GetUser)
 	}

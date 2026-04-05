@@ -3,57 +3,25 @@ package handler
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	"github.com/dwikie/sentra-payment-orchestrator/helper"
 	"github.com/dwikie/sentra-payment-orchestrator/model"
-	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/o1egl/paseto"
 )
 
 type UserHandler struct {
-	Pool        *pgxpool.Pool
-	OrgsHandler *OrganizationHandler
+	pool *pgxpool.Pool
 }
 
-func NewUserHandler(pool *pgxpool.Pool, orgsHandler *OrganizationHandler) *UserHandler {
-	return &UserHandler{Pool: pool, OrgsHandler: orgsHandler}
+type UserHandlerDependencies struct{}
+
+func NewUserHandler(pool *pgxpool.Pool, deps *UserHandlerDependencies) *UserHandler {
+	return &UserHandler{pool: pool}
 }
 
-func (h *UserHandler) Register(c *gin.Context) {
-	ctx := c.Request.Context()
-	payload := model.CreateUserpayload{}
-
-	if err := c.ShouldBindJSON(&payload); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	if err := h.insertUser(ctx, payload); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusCreated, gin.H{"message": "User registered successfully"})
-}
-
-func (h *UserHandler) GetUser(c *gin.Context) {
-	claims := c.MustGet("claims").(*paseto.JSONToken)
-	fmt.Printf("claims: %v\n", claims)
-	userID := c.Param("id")
-	if userID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "user ID is required"})
-		return
-	}
-
-	// Implement logic to retrieve user by ID
-	c.JSON(http.StatusOK, gin.H{"message": "GetUser endpoint", "user_id": userID})
-}
-
-func (h *UserHandler) insertUser(ctx context.Context, payload model.CreateUserpayload) error {
-	conn, err := h.Pool.Acquire(ctx)
+func (h *UserHandler) InsertUser(ctx context.Context, payload model.CreateUserpayload) error {
+	conn, err := h.pool.Acquire(ctx)
 	if err != nil {
 		return fmt.Errorf("error while acquiring database connection from pool: %v", err)
 	}
@@ -95,13 +63,13 @@ func (h *UserHandler) insertUser(ctx context.Context, payload model.CreateUserpa
 	return nil
 }
 
-func (h *UserHandler) getUserByEmail(ctx context.Context, email string) (*model.User, error) {
+func (h *UserHandler) GetUserByEmail(ctx context.Context, email string) (*model.User, error) {
 	if email == "" {
 		return nil, fmt.Errorf("email cannot be empty")
 	}
 
 	user := model.User{}
-	conn, err := h.Pool.Acquire(ctx)
+	conn, err := h.pool.Acquire(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -124,8 +92,8 @@ func (h *UserHandler) getUserByEmail(ctx context.Context, email string) (*model.
 	return &user, nil
 }
 
-func (h *UserHandler) updateLastLogin(ctx context.Context, userID int64) error {
-	conn, err := h.Pool.Acquire(ctx)
+func (h *UserHandler) UpdateLastLogin(ctx context.Context, userID int64) error {
+	conn, err := h.pool.Acquire(ctx)
 	if err != nil {
 		return fmt.Errorf("error while acquiring database connection from pool: %v", err)
 	}

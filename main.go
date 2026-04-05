@@ -7,10 +7,6 @@ import (
 	"github.com/spf13/viper"
 )
 
-type App struct {
-	Handlers *Handlers
-}
-
 func main() {
 	cfg, err := InitConfig()
 	if err != nil {
@@ -26,16 +22,12 @@ func main() {
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery())
 
-	// add custom headers for every response
 	r.Use(func(c *gin.Context) {
 		c.Next()
 	})
 
-	app := &App{
-		Handlers: NewHandlers(cfg.Pool),
-	}
-
-	app.RegisterRoutes(r)
+	InitializeHandlers(cfg.Pool)
+	RegisterRoutes(r, cfg.Pool)
 
 	if err := r.Run(":8080"); err != nil {
 		log.Fatalf("Failed to run server: %v", err)
