@@ -4,15 +4,24 @@ import (
 	"log"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 	"github.com/spf13/viper"
 )
 
+type App struct {
+	Pool     *pgxpool.Pool
+	Redis    *redis.Client
+	Handlers *Handlers
+}
+
 func main() {
-	cfg, err := InitConfig()
+	app, err := InitializeApp()
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer cfg.Pool.Close()
+
+	defer app.Pool.Close()
 
 	env := viper.GetString("APP_ENV")
 	if env == "production" {
@@ -26,8 +35,8 @@ func main() {
 		c.Next()
 	})
 
-	InitializeHandlers(cfg.Pool)
-	RegisterRoutes(r, cfg.Pool)
+	app.InitializeHandlers(app.Pool, app.Redis)
+	app.RegisterRoutes(r)
 
 	if err := r.Run(":8080"); err != nil {
 		log.Fatalf("Failed to run server: %v", err)

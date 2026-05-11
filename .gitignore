@@ -1,3 +1,5 @@
 .env
 migrations/__pycache__/
 migrations/migrations.go
+
+secret

@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/dwikie/sentra-payment-orchestrator/handler"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 )
 
 type Handlers struct {
@@ -10,11 +11,11 @@ type Handlers struct {
 	User *handler.UserHandler
 }
 
-func InitializeHandlers(pool *pgxpool.Pool) *Handlers {
+func (a *App) InitializeHandlers(pool *pgxpool.Pool, redis *redis.Client) {
 	UserHandler := handler.NewUserHandler(pool, &handler.UserHandlerDependencies{})
-	AuthHandler := handler.NewAuthHandler(pool, &handler.AuthHandlerDependencies{User: UserHandler})
+	AuthHandler := handler.NewAuthHandler(pool, redis, &handler.AuthHandlerDependencies{User: UserHandler})
 
-	return &Handlers{
+	a.Handlers = &Handlers{
 		Auth: AuthHandler,
 		User: UserHandler,
 	}
