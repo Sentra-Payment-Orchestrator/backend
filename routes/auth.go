@@ -12,7 +12,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/o1egl/paseto"
-	"github.com/redis/go-redis/v9"
 	"github.com/spf13/viper"
 )
 
@@ -25,9 +24,9 @@ type AuthRouteHandlers struct {
 	User *handler.UserHandler
 }
 
-func InitAuthRoute(pool *pgxpool.Pool, redis *redis.Client) *AuthRoute {
+func InitAuthRoute(pool *pgxpool.Pool) *AuthRoute {
 	return &AuthRoute{Handlers: &AuthRouteHandlers{
-		Auth: handler.NewAuthHandler(pool, redis, nil),
+		Auth: handler.NewAuthHandler(pool, nil),
 		User: handler.NewUserHandler(pool, nil),
 	}}
 }
@@ -35,7 +34,6 @@ func InitAuthRoute(pool *pgxpool.Pool, redis *redis.Client) *AuthRoute {
 func (h *AuthRoute) Login(c *gin.Context) {
 	ctx := c.Request.Context()
 	payload := model.LoginRequest{}
-
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -56,45 +54,38 @@ func (h *AuthRoute) Login(c *gin.Context) {
 		return
 	}
 
+	refreshTokenSecret := viper.GetString("REFRESH_TOKEN_SECRET")
 	now := time.Now()
-	rts := viper.GetString("REFRESH_TOKEN_SECRET")
 
-	rt, err := helper.CreateToken(
-		[]byte(rts),
-		paseto.JSONToken{
-			Subject:    fmt.Sprintf("%d", user.Id),
-			IssuedAt:   now,
-			NotBefore:  now,
-			Expiration: now.Add(24 * time.Hour),
-		},
-		"",
-	)
+	refreshClaims := paseto.JSONToken{
+		Subject:    fmt.Sprintf("%d", user.Id),
+		IssuedAt:   now,
+		NotBefore:  now,
+		Expiration: now.Add(24 * time.Hour),
+	}
 
+	refreshToken, err := helper.CreateToken([]byte(refreshTokenSecret), refreshClaims, "")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create refresh token"})
 		return
 	}
 
-	ats := viper.GetString("ACCESS_TOKEN_SECRET")
+	accessTokenSecret := viper.GetString("ACCESS_TOKEN_SECRET")
+	accessClaims := paseto.JSONToken{
+		Subject:    fmt.Sprintf("%d", user.Id),
+		IssuedAt:   now,
+		NotBefore:  now,
+		Expiration: now.Add(15 * time.Minute),
+	}
 
-	at, err := helper.CreateToken(
-		[]byte(ats),
-		paseto.JSONToken{
-			Subject:    fmt.Sprintf("%d", user.Id),
-			IssuedAt:   now,
-			NotBefore:  now,
-			Expiration: now.Add(15 * time.Minute),
-		},
-		"",
-	)
-
+	accessToken, err := helper.CreateToken([]byte(accessTokenSecret), accessClaims, "")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create access token"})
 		return
 	}
 
 	domain := viper.GetString("DOMAIN")
-	c.SetCookie("refresh_token", rt, 3600*24, "/", domain, false, true)
+	c.SetCookie("refresh_token", refreshToken, 3600*24, "/", domain, false, true)
 
 	err = h.Handlers.User.UpdateLastLogin(ctx, user.Id)
 	if err != nil {
@@ -102,13 +93,10 @@ func (h *AuthRoute) Login(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Login successful",
-		"data": gin.H{
-			"access_token":  at,
-			"refresh_token": rt,
-		},
-	})
+	c.JSON(http.StatusOK, gin.H{"message": "Login successful", "data": gin.H{
+		"access_token":  accessToken,
+		"refresh_token": refreshToken,
+	}})
 }
 
 func (h *AuthRoute) Logout(c *gin.Context) {

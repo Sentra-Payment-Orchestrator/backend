@@ -4,23 +4,22 @@ import (
 	"fmt"
 
 	"github.com/dwikie/sentra-payment-orchestrator/config"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func InitializeApp() (*App, error) {
+type Config struct {
+	Pool *pgxpool.Pool
+}
+
+func InitConfig() (*Config, error) {
 	config.LoadEnv()
 
 	pool, err := config.InitDb()
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize database: %w", err)
+		return nil, fmt.Errorf("error while initialize database connection pool: %v", err)
 	}
 
-	redis, err := config.InitRedis()
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize redis: %w", err)
-	}
-
-	return &App{
-		Pool:  pool,
-		Redis: redis,
+	return &Config{
+		Pool: pool,
 	}, nil
 }
