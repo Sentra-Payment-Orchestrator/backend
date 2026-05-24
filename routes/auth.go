@@ -3,6 +3,7 @@ package routes
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/dwikie/sentra-payment-orchestrator/handler"
@@ -56,51 +57,26 @@ func (h *AuthRoute) Login(c *gin.Context) {
 		return
 	}
 
-	now := time.Now()
-	rts := viper.GetString("REFRESH_TOKEN_SECRET")
-
-	rt, err := helper.CreateToken(
-		[]byte(rts),
-		paseto.JSONToken{
-			Subject:    fmt.Sprintf("%d", user.Id),
-			IssuedAt:   now,
-			NotBefore:  now,
-			Expiration: now.Add(24 * time.Hour),
-		},
-		"",
-	)
-
+	rt, jti, err := h.Handlers.Auth.CreateRefreshToken(ctx, user.Id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create refresh token"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	ats := viper.GetString("ACCESS_TOKEN_SECRET")
-
-	at, err := helper.CreateToken(
-		[]byte(ats),
-		paseto.JSONToken{
-			Subject:    fmt.Sprintf("%d", user.Id),
-			IssuedAt:   now,
-			NotBefore:  now,
-			Expiration: now.Add(15 * time.Minute),
-		},
-		"",
-	)
-
+	at, _, err := h.Handlers.Auth.CreateAccessToken(ctx, user.Id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create access token"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	err = h.Handlers.Auth.StoreSession(ctx, user.Id, rt, jti)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to store session"})
 		return
 	}
 
 	domain := viper.GetString("DOMAIN")
 	c.SetCookie("refresh_token", rt, 3600*24, "/", domain, false, true)
-
-	err = h.Handlers.User.UpdateLastLogin(ctx, user.Id)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update last login"})
-		return
-	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Login successful",
@@ -112,8 +88,31 @@ func (h *AuthRoute) Login(c *gin.Context) {
 }
 
 func (h *AuthRoute) Logout(c *gin.Context) {
+	ctx := c.Request.Context()
+	rt, err := c.Cookie("refresh_token")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing refresh token"})
+		return
+	}
+
 	domain := viper.GetString("DOMAIN")
 	c.SetCookie("refresh_token", "", -1, "/", domain, false, true)
+
+	rts := viper.GetString("REFRESH_TOKEN_SECRET")
+	claims, _, _ := helper.DecodeToken([]byte(rts), rt, nil)
+
+	userId, err := strconv.ParseInt(claims.Subject, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "bad token"})
+		return
+	}
+
+	err = h.Handlers.Auth.InvalidateSession(ctx, userId, claims.Jti)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to invalidate session"})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{"message": "Logout successful"})
 }
 

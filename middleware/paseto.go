@@ -28,6 +28,8 @@ func RequiredAuthentication() gin.HandlerFunc {
 			return
 		}
 
+		at := parts[1]
+
 		secret := viper.GetString("ACCESS_TOKEN_SECRET")
 		tokenValidator := map[string]func(string) error{
 			"nbf": func(value string) error {
@@ -52,7 +54,7 @@ func RequiredAuthentication() gin.HandlerFunc {
 			},
 		}
 
-		claims, _, err := helper.DecodeToken([]byte(secret), parts[1], tokenValidator)
+		claims, _, err := helper.DecodeToken([]byte(secret), at, tokenValidator)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 			return

@@ -5,8 +5,12 @@ Content-Type: application/json
   "email": "johndoe@mail.com",
   "password": "securepassword"
 }
-
 ###
 
 GET http://localhost:8080/auth/refresh
 Content-Type: application/json
+###
+
+POST http://localhost:8080/auth/logout
+Authorization: Bearer v2.local.56VGsgyst3_ZXxxSWkBxgQ98GN-_rKAIBeA7lSHdO6ruMmX5rzDYkrzDw9aScooG4ekNFeprnCNHCq2tbc3wRlq_sJZqd6r2NqQbKSpMmsu81KhcI1RYilUP_gmXuvscotRsy16Y1RHjyA_HM8ijXxU3ONEfKeTd6HHt1Ql2c9ooRNfMP8Qx45m4PZ90B6XaEWuUnUcWAU5gBi4e7UpWn7JXCvR52zyCd_tvYHp38tdU80LKVuLV9fqaq90K98cBM-EhH3iL
+Cookie: refresh_token=v2.local.4CgGf3MMahSWwPKo78fMSxcHxm2D0fXB4jl4WPtbXEXzeCxIn7hgW5_NbCr0pAQMN3MfsCYAwNEOeJ3IvW1i_ZGU1ZdxHr4YyLIypm-aPv7qP1ALiKBq79Ioi_KkE1wCAQFbozeG-9Ny_aFF7zk1c2H2uxlLog2Qs2WY6xb9TABBHv6HNq7M4Nglzdv1_9xEcGIPARDjyOm9O3HnZLmtAicDWyNBnhNSYwJWLktLqp8XXzlQoYNRoE5HhvqybQvr2hOHZpQA

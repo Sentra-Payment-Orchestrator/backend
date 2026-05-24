@@ -20,6 +20,7 @@ func (a *App) RegisterRoutes(g *gin.Engine) {
 	{
 		auth_group.POST("/login", r.Auth.Login)
 		auth_group.GET("/refresh", r.Auth.RefreshToken)
+		auth_group.POST("/logout", middleware.RequiredAuthentication(), r.Auth.Logout)
 	}
 
 	user := routes.InitUserRoute(a.Pool)
